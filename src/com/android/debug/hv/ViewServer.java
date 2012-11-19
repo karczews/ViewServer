@@ -110,6 +110,10 @@ public class ViewServer implements Runnable {
     /**
      * The default port used to start view servers.
      */
+	
+	private static final boolean DEBUG = true;
+	private static final String TAG = "ViewServer";
+	
     private static final int VIEW_SERVER_DEFAULT_PORT = 4939;
     private static final int VIEW_SERVER_MAX_CONNECTIONS = 10;
     private static final String BUILD_TYPE_USER = "user";
@@ -162,11 +166,12 @@ public class ViewServer implements Runnable {
      * @param context A Context used to check whether the application is
      *                debuggable, this can be the application context
      */
-    public static ViewServer get(Context context) {
+	public static ViewServer get(Context context) {
         ApplicationInfo info = context.getApplicationInfo();
         if (BUILD_TYPE_USER.equals(Build.TYPE) &&
                 (info.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             if (sServer == null) {
+            	if (DEBUG) Log.d(TAG, "creating server instance @port:" + ViewServer.VIEW_SERVER_DEFAULT_PORT);
                 sServer = new ViewServer(ViewServer.VIEW_SERVER_DEFAULT_PORT);
             }
     
@@ -180,7 +185,7 @@ public class ViewServer implements Runnable {
         } else {
             sServer = new NoopViewServer();
         }
-
+        if (DEBUG) Log.d(TAG, "[>>] get() - " + sServer);
         return sServer;
     }
 
@@ -214,6 +219,7 @@ public class ViewServer implements Runnable {
         if (mThread != null) {
             return false;
         }
+        if (DEBUG) Log.d(TAG, "starting server ... port:" + mPort);
 
         mThread = new Thread(this, "Local View Server [port=" + mPort + "]");
         mThreadPool = Executors.newFixedThreadPool(VIEW_SERVER_MAX_CONNECTIONS);
@@ -233,6 +239,7 @@ public class ViewServer implements Runnable {
      * @see WindowManagerService#stopViewServer()
      */
     public boolean stop() {
+    	if (DEBUG) Log.d(TAG, "stoping server ...");
         if (mThread != null) {
             mThread.interrupt();
             if (mThreadPool != null) {
@@ -391,6 +398,7 @@ public class ViewServer implements Runnable {
             // Any uncaught exception will crash the system process
             try {
                 Socket client = mServer.accept();
+                if (DEBUG) Log.d(TAG, "client connected ...");
                 if (mThreadPool != null) {
                     mThreadPool.submit(new ViewServerWorker(client));
                 } else {
@@ -407,6 +415,7 @@ public class ViewServer implements Runnable {
     }
 
     private static boolean writeValue(Socket client, String value) {
+    	if (DEBUG) Log.d(TAG, "writeValue() val:" + value);
         boolean result;
         BufferedWriter out = null;
         try {
@@ -577,7 +586,7 @@ public class ViewServer implements Runnable {
                     command = request.substring(0, index);
                     parameters = request.substring(index + 1);
                 }
-
+                if (DEBUG) Log.d(TAG, "executing client command:" + command);
                 boolean result;
                 if (COMMAND_PROTOCOL_VERSION.equalsIgnoreCase(command)) {
                     result = writeValue(mClient, VALUE_PROTOCOL_VERSION);
@@ -618,6 +627,7 @@ public class ViewServer implements Runnable {
         }
 
         private boolean windowCommand(Socket client, String command, String parameters) {
+        	if (DEBUG) Log.d(TAG, "writeCommand() command:" + command + " params:" + parameters);
             boolean success = true;
             BufferedWriter out = null;
 
