@@ -121,8 +121,8 @@ public class ViewServer implements Runnable {
     // Debug facility
     private static final String LOG_TAG = "ViewServer";
 
-    private static final String VALUE_PROTOCOL_VERSION = "4";
-    private static final String VALUE_SERVER_VERSION = "4";
+    private static final String VALUE_PROTOCOL_VERSION = "5";
+    private static final String VALUE_SERVER_VERSION = "5";
 
     // Protocol commands
     // Returns the protocol version
@@ -135,6 +135,8 @@ public class ViewServer implements Runnable {
     private static final String COMMAND_WINDOW_MANAGER_AUTOLIST = "AUTOLIST";
     // Returns the focused window
     private static final String COMMAND_WINDOW_MANAGER_GET_FOCUS = "GET_FOCUS";
+    
+    private static final String COMMAND_UPDATE_PROPERTY = "UPDATE_PROPERTY";
 
     private ServerSocket mServer;
     private final int mPort;
@@ -588,7 +590,9 @@ public class ViewServer implements Runnable {
                 }
                 if (DEBUG) Log.d(TAG, "executing client command:" + command);
                 boolean result;
-                if (COMMAND_PROTOCOL_VERSION.equalsIgnoreCase(command)) {
+                if (COMMAND_UPDATE_PROPERTY.equalsIgnoreCase(command)) {
+                	result = updateValue(mClient, request);
+                } else if (COMMAND_PROTOCOL_VERSION.equalsIgnoreCase(command)) {
                     result = writeValue(mClient, VALUE_PROTOCOL_VERSION);
                 } else if (COMMAND_SERVER_VERSION.equalsIgnoreCase(command)) {
                     result = writeValue(mClient, VALUE_SERVER_VERSION);
@@ -851,4 +855,28 @@ public class ViewServer implements Runnable {
             return true;
         }
     }
+
+	public boolean updateValue(Socket client, String request) {
+		if (DEBUG) Log.d(TAG, "updateValue() val:" + request);
+		boolean result = false;
+        BufferedWriter out = null;
+        try {
+            OutputStream clientStream = client.getOutputStream();
+            out = new BufferedWriter(new OutputStreamWriter(clientStream));//, 8 * 1024);
+            out.write("DONE\n");
+            out.flush();
+            result = true;
+        } catch (Exception e) {
+           Log.e(TAG, "problem while writing response for updateValue", e);
+        } finally {
+            if (out != null) {
+                try {
+                    out.close();
+                } catch (IOException e) {
+                	Log.e(TAG, "problem while closing output stream", e);
+                }
+            }
+        }
+        return result;
+	}
 }

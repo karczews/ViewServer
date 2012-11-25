@@ -2,7 +2,9 @@ package com.android.debug.hv;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
@@ -16,7 +18,18 @@ public class ViewServerActivity extends Activity {
 
         if (getIntent().getExtras() != null) mCounter = getIntent().getExtras().getInt("counter");
         ((TextView) findViewById(R.id.label)).setText("Activity #" + (mCounter + 1));
-
+        
+        String s = Uri.decode("action://LaunchScreen/SubMenuScreen?menuId=com.tomtom.navui.stocknavapp%2Fsettingssubmenu&redirectUri=SubMenuScreen?menuId=com.tomtom.navui.stocknavapp%2Fsettingssubmenu%26redirectUri=SubMenuScreen");
+        s = Uri.decode(s);
+        Log.d("DUPAA2", s);
+        
+//        final Resources resources = this.getResources();
+//        resources.getIdentifier(name, defType, defPackage)
+//        if (id >= 0) {
+//            try {
+//                fieldValue = resources.getResourceTypeName(id) + '/' +
+//                        resources.getResourceEntryName(id);
+//            }
         ViewServer.get(this).addWindow(this);
     }
     
