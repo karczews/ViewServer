@@ -118,7 +118,7 @@ public class ViewServer implements Runnable {
 	private static final boolean DEBUG = true;
 	private static final String TAG = "ViewServer";
 	
-    private static final int VIEW_SERVER_DEFAULT_PORT = 4939;
+    private static final int VIEW_SERVER_DEFAULT_PORT = 4949;
     private static final int VIEW_SERVER_MAX_CONNECTIONS = 10;
     private static final String BUILD_TYPE_USER = "user";
 
@@ -589,7 +589,8 @@ public class ViewServer implements Runnable {
                 in = new BufferedReader(new InputStreamReader(mClient.getInputStream()), 1024);
 
                 final String request = in.readLine();
-
+                Log.d(TAG, "request:  " + request);
+                
                 String command;
                 String parameters;
 
@@ -896,21 +897,29 @@ public class ViewServer implements Runnable {
             final Property property = parseProperty(parameters);
             try {
             	final View v = getViewByHashCode(hashCode, (ViewGroup) mRootView);
+            	Log.d(TAG, "setted value view:" + v + " mRootActivity " + mRootActivity);
             	mRootActivity.runOnUiThread(new Runnable() {
             		@Override
             		public void run() {
-                    	((TextView) v).setText(property.getValue());	
+            			Log.d(TAG, "setValue " + property.getValue());
+            			v.refreshDrawableState();
+                    	((TextView) v).setText(property.getValue());
+                    	v.forceLayout();
+                    	 mRootView.destroyDrawingCache();
+                         mRootView.invalidate();
+                         mRootView.forceLayout();
             		}
             	}); 
-            	Log.d(TAG, "setting value view:" + v);
+            	
+            	Log.d(TAG, "setted value view:" + v);
 //            	Field field = v.getClass().getDeclaredField(property.getName());
 //            	field.setAccessible(true);
 //            	field.set(v, property.getValue());
             } catch (Exception e) {
             	Log.e(TAG, "error setting value", e);
             }
-//            window.invalidate();
-            mRootView.invalidate();
+            
+           
             result = writeResponse(client, "DONE\n");
             return result;
     	}
@@ -942,6 +951,7 @@ public class ViewServer implements Runnable {
     
     
 	public static Property parseProperty(String property) {
+		if (DEBUG) Log.d(TAG, "property: " + property);
 		String name = property.substring(0, property.indexOf("="));
 		String value = property.substring(property.indexOf(',') + 1);
 		return new Property(name, value);
