@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -42,6 +43,9 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewDebug;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.TextView;
 
 /**
  * <p>This class can be used to enable the use of HierarchyViewer inside an
@@ -148,6 +152,13 @@ public class ViewServer implements Runnable {
         new CopyOnWriteArrayList<ViewServer.WindowListener>();
 
     private final HashMap<View, String> mWindows = new HashMap<View, String>();
+    
+    /**
+     * TEMP::
+     */
+    private View mRootView;
+    private Activity mRootActivity;
+    
     private final ReentrantReadWriteLock mWindowsLock = new ReentrantReadWriteLock();
 
     private View mFocusedWindow;
@@ -303,6 +314,7 @@ public class ViewServer implements Runnable {
      * @see #removeWindow(Activity)
      */
     public void addWindow(Activity activity) {
+    	mRootActivity = activity;
         String name = activity.getTitle().toString();
         if (TextUtils.isEmpty(name)) {
             name = activity.getClass().getCanonicalName() +
@@ -335,6 +347,7 @@ public class ViewServer implements Runnable {
      */
     public void addWindow(View view, String name) {
         mWindowsLock.writeLock().lock();
+        mRootView = view;
         try {
             mWindows.put(view.getRootView(), name);
         } finally {
@@ -376,7 +389,7 @@ public class ViewServer implements Runnable {
      * @param view A view that belongs to the view hierarchy/window that has focus,
      *             or null to remove focus
      */
-    public void setFocusedWindow(View view) {
+	public void setFocusedWindow(View view) {
         mFocusLock.writeLock().lock();
         try {
             mFocusedWindow = view == null ? null : view.getRootView();
@@ -591,7 +604,7 @@ public class ViewServer implements Runnable {
                 if (DEBUG) Log.d(TAG, "executing client command:" + command);
                 boolean result;
                 if (COMMAND_UPDATE_PROPERTY.equalsIgnoreCase(command)) {
-                	result = updateValue(mClient, request);
+                	result = updateValue(mClient, parameters);
                 } else if (COMMAND_PROTOCOL_VERSION.equalsIgnoreCase(command)) {
                     result = writeValue(mClient, VALUE_PROTOCOL_VERSION);
                 } else if (COMMAND_SERVER_VERSION.equalsIgnoreCase(command)) {
@@ -854,29 +867,127 @@ public class ViewServer implements Runnable {
             }
             return true;
         }
-    }
+        
+    	public boolean updateValue(Socket client, String parameters) {
+    		if (DEBUG) Log.d(TAG, "updateValue() val:" + parameters);
+    		boolean result = false;
+    		
+    		int index = parameters.indexOf(' ');
+            if (index == -1) {
+                index = parameters.length();
+            }
+            final String code = parameters.substring(0, index);
+            int hashCode = (int) Long.parseLong(code, 16);
 
-	public boolean updateValue(Socket client, String request) {
-		if (DEBUG) Log.d(TAG, "updateValue() val:" + request);
-		boolean result = false;
-        BufferedWriter out = null;
-        try {
-            OutputStream clientStream = client.getOutputStream();
-            out = new BufferedWriter(new OutputStreamWriter(clientStream));//, 8 * 1024);
-            out.write("DONE\n");
-            out.flush();
-            result = true;
-        } catch (Exception e) {
-           Log.e(TAG, "problem while writing response for updateValue", e);
-        } finally {
-            if (out != null) {
-                try {
-                    out.close();
-                } catch (IOException e) {
-                	Log.e(TAG, "problem while closing output stream", e);
+            // Extract the command's parameter after the window description
+            if (index < parameters.length()) {
+                parameters = parameters.substring(index + 1);
+            } else {
+                parameters = "";
+            }
+            
+            Log.d(TAG, "findcode: hex:" + code + "  int:" + hashCode);
+//            final View window = findWindow(hashCode);
+//            if (window == null) {
+//            	Log.e(TAG, "no window found !");
+//            	writeResponse(client, "NO_VIEW_FOUND\n");
+//                return false;
+//            }
+            final Property property = parseProperty(parameters);
+            try {
+            	final View v = getViewByHashCode(hashCode, (ViewGroup) mRootView);
+            	mRootActivity.runOnUiThread(new Runnable() {
+            		@Override
+            		public void run() {
+                    	((TextView) v).setText(property.getValue());	
+            		}
+            	}); 
+            	Log.d(TAG, "setting value view:" + v);
+//            	Field field = v.getClass().getDeclaredField(property.getName());
+//            	field.setAccessible(true);
+//            	field.set(v, property.getValue());
+            } catch (Exception e) {
+            	Log.e(TAG, "error setting value", e);
+            }
+//            window.invalidate();
+            mRootView.invalidate();
+            result = writeResponse(client, "DONE\n");
+            return result;
+    	}
+    	
+    	private boolean writeResponse(Socket client, String response) {
+    		boolean result = false;
+            BufferedWriter out = null;
+            try {
+                OutputStream clientStream = client.getOutputStream();
+                out = new BufferedWriter(new OutputStreamWriter(clientStream));//, 8 * 1024);
+                out.write(response);
+                out.flush();
+                result = true;
+            } catch (Exception e) {
+               Log.e(TAG, "problem while writing response for updateValue", e);
+            } finally {
+                if (out != null) {
+                    try {
+                        out.close();
+                    } catch (IOException e) {
+                    	Log.e(TAG, "problem while closing output stream", e);
+                    }
                 }
             }
-        }
-        return result;
+            return result;
+    		
+    	}
+    }
+    
+    
+	public static Property parseProperty(String property) {
+		String name = property.substring(0, property.indexOf("="));
+		String value = property.substring(property.indexOf(',') + 1);
+		return new Property(name, value);
+	}
+	
+	private static class Property {
+		private final String mName;
+		private final String mValue;
+		private final boolean mIsMethodProperty; 
+		Property(String name, String value) {
+			mName = name;
+			mValue = value;
+			if (name != null && name.contains("()")) {
+				mIsMethodProperty = true;
+			} else {
+				mIsMethodProperty = false;
+			}
+		}
+		public String getName() {
+			return mName;
+		}
+		
+		public String getValue() {
+			return mValue;
+		}
+		
+		public boolean isMethodProperty() {
+			return mIsMethodProperty;
+		}
+	}
+	
+	public static View getViewByHashCode(int hashCode, ViewGroup vg) {
+		Log.d(TAG, "getViewByHashCode() code:" + hashCode + " group:" + vg);
+		View view = null;
+		for (int i =0; i < vg.getChildCount(); i++) {
+			View child = vg.getChildAt(i);
+			int childHashCode = System.identityHashCode(child);
+			Log.d(TAG, "getViewByHashCode() checkHashcode:" + hashCode + "?=" + childHashCode  +" ChildHex:" + Integer.toHexString(child.hashCode()));
+			if (childHashCode == hashCode) return child;
+			
+			if (child instanceof ViewGroup) {
+				View res = getViewByHashCode(hashCode, (ViewGroup) child);
+				if (res != null) return res;
+			}
+		}
+		
+		return view;
 	}
 }
