@@ -902,12 +902,8 @@ public class ViewServer implements Runnable {
             		@Override
             		public void run() {
             			Log.d(TAG, "setValue " + property.getValue());
-            			v.refreshDrawableState();
                     	((TextView) v).setText(property.getValue());
                     	v.forceLayout();
-                    	 mRootView.destroyDrawingCache();
-                         mRootView.invalidate();
-                         mRootView.forceLayout();
             		}
             	}); 
             	
