@@ -39,12 +39,12 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
+import android.os.Handler;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewDebug;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.TextView;
 
 /**
@@ -118,7 +118,7 @@ public class ViewServer implements Runnable {
 	private static final boolean DEBUG = true;
 	private static final String TAG = "ViewServer";
 	
-    private static final int VIEW_SERVER_DEFAULT_PORT = 4949;
+    private static final int VIEW_SERVER_DEFAULT_PORT = 4939;
     private static final int VIEW_SERVER_MAX_CONNECTIONS = 10;
     private static final String BUILD_TYPE_USER = "user";
 
@@ -157,7 +157,7 @@ public class ViewServer implements Runnable {
      * TEMP::
      */
     private View mRootView;
-    private Activity mRootActivity;
+    private Handler mUiHandler;
     
     private final ReentrantReadWriteLock mWindowsLock = new ReentrantReadWriteLock();
 
@@ -314,7 +314,6 @@ public class ViewServer implements Runnable {
      * @see #removeWindow(Activity)
      */
     public void addWindow(Activity activity) {
-    	mRootActivity = activity;
         String name = activity.getTitle().toString();
         if (TextUtils.isEmpty(name)) {
             name = activity.getClass().getCanonicalName() +
@@ -348,6 +347,7 @@ public class ViewServer implements Runnable {
     public void addWindow(View view, String name) {
         mWindowsLock.writeLock().lock();
         mRootView = view;
+        //mUiHandler = new Handler(view.getContext().getMainLooper());
         try {
             mWindows.put(view.getRootView(), name);
         } finally {
@@ -897,13 +897,23 @@ public class ViewServer implements Runnable {
             final Property property = parseProperty(parameters);
             try {
             	final View v = getViewByHashCode(hashCode, (ViewGroup) mRootView);
-            	Log.d(TAG, "setted value view:" + v + " mRootActivity " + mRootActivity);
-            	mRootActivity.runOnUiThread(new Runnable() {
+            	Field [] fields = v.getClass().getDeclaredFields();
+            	Log.d(TAG, "view: " + v.getClass());
+            	for (Field f : fields) {
+            		Log.d(TAG, "fieldName: " + f.getName());
+            	}
+            	Field field = v.getClass().getDeclaredField(property.getName());
+            	field.setAccessible(true);
+            	field.set(v, property.getValue());
+            	
+            	Log.d(TAG, "setted value view:" + v);
+            	mUiHandler.post(new Runnable() {
             		@Override
             		public void run() {
             			Log.d(TAG, "setValue " + property.getValue());
-                    	((TextView) v).setText(property.getValue());
+                    	//((TextView) v).setText(property.getValue());
                     	v.forceLayout();
+                    	v.invalidate();
             		}
             	}); 
             	
