@@ -56,6 +56,7 @@ import android.widget.TextView;
  * 
  * <pre>
  * 
+ * 
  * public class MyActivity extends Activity {
  * 
  *     public void onCreate( Bundle savedInstanceState ) {
@@ -80,6 +81,7 @@ import android.widget.TextView;
  * </p>
  * 
  * <pre>
+ * 
  * 
  * public class MyInputMethodService extends InputMethodService {
  * 
@@ -854,14 +856,22 @@ public class ViewServer implements Runnable {
                         Log.d(TAG, "parse " + property);
                         String fieldName = property.getName();
                         String methodName = "";
-                        if (fieldName.startsWith("get") && fieldName.endsWith("()")) {
-                            methodName = "set" + fieldName.substring(fieldName.indexOf("set")+4, fieldName.length()-2);
-                        } else if (fieldName.startsWith("is") && fieldName.endsWith("()")) {
-                            methodName = "set" + fieldName.substring(fieldName.indexOf("is")+2, fieldName.length()-2);
-                        } 
-                        else if (fieldName.startsWith("text")) {
+                        if (fieldName.startsWith("text")) {
                             methodName = "set" + fieldName.substring(fieldName.indexOf(":") + 2 /* :m */);
+                            return methodName;
                         }
+                        if (fieldName.contains(":")){
+                            fieldName = fieldName.substring(fieldName.indexOf(":")+1);
+                            Log.d(TAG, "cut fieldName " + fieldName);
+                        }
+                        if (fieldName.startsWith("m")){
+                            methodName = "set" + fieldName.substring(fieldName.indexOf("m") + 1);
+                        } 
+                        if (fieldName.startsWith("get") && fieldName.endsWith("()")) {
+                            methodName = "set" + fieldName.substring(fieldName.indexOf("set") + 4, fieldName.length() - 2);
+                        } else if (fieldName.startsWith("is") && fieldName.endsWith("()")) {
+                            methodName = "set" + fieldName.substring(fieldName.indexOf("is") + 2, fieldName.length() - 2);
+                        } 
                         Log.d(TAG, "methodName :" + methodName);
                         return methodName;
                     }
@@ -929,7 +939,7 @@ public class ViewServer implements Runnable {
                 return CharSequence.class;
             } else if (mName.startsWith("get")) {
                 return int.class;
-            }else if (mName.startsWith("is")){
+            } else if (mName.startsWith("is")) {
                 return boolean.class;
             }
             return int.class;
@@ -954,13 +964,22 @@ public class ViewServer implements Runnable {
                     return 0; //VISIBLE
                 }
             }
-            if (mName.startsWith("get")){
+            if (mName.startsWith("get")) {
                 return Integer.parseInt(mValue);
             }
-            if (mName.startsWith("is")){
+            if (mName.startsWith("is")) {
                 return Boolean.parseBoolean(mValue);
             }
-            return getType().cast(mValue);
+            try {
+                getType().cast(mValue);
+            } catch (ClassCastException e) {
+                try {
+                    return Integer.parseInt(mValue);
+                } catch (NumberFormatException ex) {
+                    return mValue;
+                }
+            }
+            return mValue;
         }
 
         public boolean isMethodProperty() {
